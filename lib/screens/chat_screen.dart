@@ -3,8 +3,11 @@ import 'package:flash_chat/constants.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-final _firestore = FirebaseFirestore
-    .instance; //outside,so we can access it in refactored messageStream widget
+final _firestore =
+    FirebaseFirestore //outside,so we can access it in refactored messageStream widget
+        .instance;
+
+late User loggedInUser;
 
 class ChatScreen extends StatefulWidget {
   static String id = 'chat_screen';
@@ -17,7 +20,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final messageTextController = TextEditingController();
 
   final _auth = FirebaseAuth.instance;
-  late User loggedInUser;
 
   late String messageText;
 
@@ -39,13 +41,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   //this constantly listen to stream to display messages in real time
-  void messageStream() async {
-    await for (var snapshot in _firestore.collection('Messages').snapshots()) {
-      for (var message in snapshot.docs) {
-        print(message.data());
-      }
-    }
-  }
+  // void messageStream() async {
+  //   await for (var snapshot in _firestore.collection('Messages').snapshots()) {
+  //     for (var message in snapshot.docs) {
+  //       print(message.data());
+  //     }
+  //   }
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -57,12 +59,12 @@ class _ChatScreenState extends State<ChatScreen> {
               icon: Icon(Icons.close),
               onPressed: () {
                 //Implement logout functionality
-                messageStream();
-                // _auth.signOut();
-                // Navigator.pop(context);
+
+                _auth.signOut();
+                Navigator.pop(context);
               }),
         ],
-        title: Text('⚡️Chat'),
+        title: const Text('⚡️Chat'),
         backgroundColor: Colors.lightBlueAccent,
       ),
       body: SafeArea(
@@ -72,7 +74,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: <Widget>[
             MessageStream(),
             Container(
-              //this constainer contains our chat typing area and send button in row structure
+              //this container contains our chat typing area and send button in row structure
               decoration: kMessageContainerDecoration,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -90,8 +92,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   TextButton(
                     //firestore.collection(collectionName).add(MAP)
                     onPressed: () {
-                      _firestore.collection('Messages').add(
-                          {'text': messageText, 'sender': loggedInUser.email});
+                      _firestore.collection('Messages').add({
+                        'text': messageText,
+                        'sender': loggedInUser.email,
+                        'timestamp':
+                            FieldValue.serverTimestamp(), //timestamp added
+                      });
                       //it should also clear the text area when message is sent
                       messageTextController.clear();
                     },
@@ -111,12 +117,14 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
 class MessageStream extends StatelessWidget {
-  const MessageStream({super.key});
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('Messages').snapshots(),
+        stream: _firestore
+            .collection('Messages')
+            .orderBy('timestamp',
+                descending: true) // so ican track them and get in order
+            .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return Center(
@@ -133,13 +141,19 @@ class MessageStream extends StatelessWidget {
             final messageText = messageData['text'];
             final messageSender = messageData['sender'];
 
-            final messageWidget =
-                MessageBubble(sender: messageSender, text: messageText);
+            final currentUser = loggedInUser
+                .email; //we will compare currentUser with messageSender for text UI
+
+            final messageWidget = MessageBubble(
+                sender: messageSender,
+                text: messageText,
+                isMe: currentUser == messageSender);
             messageWidgets.add(messageWidget);
           }
           return Expanded(
             //I wrapped ListView with expanded so it don't take whole screen
             child: ListView(
+              reverse: true,
               padding: EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical:
@@ -154,13 +168,16 @@ class MessageStream extends StatelessWidget {
 class MessageBubble extends StatelessWidget {
   final String sender;
   final String text;
-  MessageBubble({required this.sender, required this.text});
+
+  final bool isMe; // used for UI if me then blue message otherwise white
+  MessageBubble({required this.sender, required this.text, required this.isMe});
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(10.0),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+        crossAxisAlignment:
+            isMe == true ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
           Text(
             //sender name
@@ -168,20 +185,29 @@ class MessageBubble extends StatelessWidget {
             style: TextStyle(fontSize: 12, color: Colors.black54),
           ),
           Material(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: isMe == true
+                ? BorderRadius.only(
+                    bottomRight: Radius.circular(30),
+                    bottomLeft: Radius.circular(30),
+                    topLeft: Radius.circular(30))
+                : BorderRadius.only(
+                    bottomRight: Radius.circular(30),
+                    bottomLeft: Radius.circular(30),
+                    topRight: Radius.circular(30)),
             elevation: 5,
-            color: Colors.lightBlueAccent,
+            color: isMe == true ? Colors.lightBlueAccent : Colors.white,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
               child: Text(
-                '$text ',
-                style: TextStyle(fontSize: 15, color: Colors.white),
+                text,
+                style: TextStyle(
+                    fontSize: 15,
+                    color: isMe == true ? Colors.white : Colors.black54),
               ),
             ),
           ),
         ],
       ),
     );
-    ;
   }
 }

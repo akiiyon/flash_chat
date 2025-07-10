@@ -29,11 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Hero(
-                tag: 'logo',
-                child: Container(
-                  height: 200.0,
-                  child: Image.asset('images/logo.png'),
+              Flexible(
+                child: Hero(
+                  tag: 'logo',
+                  child: Container(
+                    height: 200.0,
+                    child: Image.asset('images/logo.png'),
+                  ),
                 ),
               ),
               SizedBox(
@@ -80,6 +82,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     });
                   } catch (e) {
                     print(e);
+                    setState(() {
+                      showSpinner = false;
+                    });
                   }
                 },
                 colour: Colors.lightBlueAccent,
